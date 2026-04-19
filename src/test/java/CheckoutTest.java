@@ -190,6 +190,7 @@ public class CheckoutTest {
                 "Order total shows $0.00 despite item being in cart");
 
         WebElement subtotalEl = driver.findElement(
+
                 By.cssSelector(".price-block__primary-price")
         );
         WebElement savingsEl = driver.findElement(
