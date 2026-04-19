@@ -3,9 +3,11 @@ import org.openqa.selenium.Keys;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.WebElement;
 import org.openqa.selenium.JavascriptExecutor;
-import org.openqa.selenium.chrome.ChromeDriver;
+import org.openqa.selenium.firefox.FirefoxDriver;
+import org.openqa.selenium.firefox.FirefoxOptions;
 import org.openqa.selenium.support.ui.ExpectedConditions;
 import org.openqa.selenium.support.ui.WebDriverWait;
+import org.openqa.selenium.firefox.FirefoxProfile;
 import org.testng.Assert;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
@@ -17,22 +19,26 @@ public class CartTest {
 
     WebDriver driver;
     WebDriverWait wait;
-    JavascriptExecutor js;  // make sure this line is here
+    JavascriptExecutor js;
+
     @BeforeMethod
     public void setup() throws InterruptedException {
-        driver = new ChromeDriver();
-        js = (JavascriptExecutor) driver;  // move this to right after driver is created
+        FirefoxOptions options = new FirefoxOptions();
+        FirefoxProfile profile = new FirefoxProfile();
+        options.setProfile(profile);
+        driver = new FirefoxDriver(options);
+        js = (JavascriptExecutor) driver;
         driver.get("https://www.bestbuy.com");
         driver.manage().window().maximize();
-        wait = new WebDriverWait(driver, Duration.ofSeconds(10));
+        driver.manage().deleteAllCookies();
+        wait = new WebDriverWait(driver, Duration.ofSeconds(20));
         Thread.sleep(3000);
     }
 
     // Test 1: Verify cart icon is present on the homepage
     @Test(priority = 1)
     public void verifyCartIconPresent() throws InterruptedException {
-        // Cart icon is typically identified by aria-label or a known class/id
-        WebElement cartButton = driver.findElement(By.className("cart-label"));
+        WebElement cartButton = driver.findElement(By.className("gvp-cart-icon-lv"));
         Assert.assertTrue(cartButton.isDisplayed(), "Cart button is not visible");
         Assert.assertTrue(cartButton.isEnabled(), "Cart button is not enabled");
         System.out.println("Test 1 PASSED: Cart icon is present on homepage");
@@ -41,7 +47,7 @@ public class CartTest {
     // Test 2: Verify navigating to the cart page directly works
     @Test(priority = 2)
     public void verifyCartPageLoads() throws InterruptedException {
-        WebElement cartButton = driver.findElement(By.className("cart-label"));
+        WebElement cartButton = driver.findElement(By.className("gvp-cart-icon-lv"));
         cartButton.click();
         Thread.sleep(4000);
 
@@ -64,8 +70,6 @@ public class CartTest {
         Thread.sleep(4000);
 
         String pageSource = driver.getPageSource();
-        System.out.println("Checking for empty cart indicator...");
-
         Assert.assertTrue(
                 pageSource.contains("Your cart is empty") ||
                         pageSource.contains("$0.00") ||
@@ -78,40 +82,38 @@ public class CartTest {
     // Test 4: Verify adding a product from search results updates the cart
     @Test(priority = 4)
     public void verifyAddToCartFromSearch() throws InterruptedException {
-        // Search for a product
         WebElement searchBar = driver.findElement(By.id("autocomplete-search-bar"));
-        searchBar.sendKeys("Wireless Mouse");
-        searchBar.sendKeys(Keys.ENTER);
-        Thread.sleep(5000);
+        searchBar.sendKeys("Wireless Headphones");
+        WebElement searchBarButton = driver.findElement(By.id("autocomplete-search-button"));
+        searchBarButton.click();;
+        Thread.sleep(8000);
 
         String currentUrl = driver.getCurrentUrl();
         System.out.println("URL after product search: " + currentUrl);
         Assert.assertTrue(currentUrl.contains("bestbuy.com"), "Left Best Buy after search");
 
-        // Click the first product image using JS to avoid intercept
-        WebElement firstProduct = wait.until(
+        String firstProductUrl = wait.until(
                 ExpectedConditions.presenceOfElementLocated(
-                        By.cssSelector("img[data-testid='product-image']")
+                        By.cssSelector("a[href*='/product/']")
                 )
-        );
-        js.executeScript("arguments[0].scrollIntoView({block: 'center'});", firstProduct);
-        Thread.sleep(1000);
-        js.executeScript("arguments[0].click();", firstProduct);
+        ).getAttribute("href");
+
+        driver.get(firstProductUrl);
         Thread.sleep(5000);
         System.out.println("Navigated to product page: " + driver.getCurrentUrl());
 
-        // Click Add to Cart using JS to bypass sticky header intercept
         WebElement atcButton = wait.until(
+                //step must be done manually due to bot prevention
                 ExpectedConditions.presenceOfElementLocated(
                         By.cssSelector("button[data-testid^='pdp-add-to-cart']")
                 )
         );
         js.executeScript("arguments[0].scrollIntoView({block: 'center'});", atcButton);
         Thread.sleep(1500);
+        atcButton = driver.findElement(By.cssSelector("button[data-testid^='pdp-add-to-cart']"));
         js.executeScript("arguments[0].click();", atcButton);
         Thread.sleep(4000);
 
-        // --- Assertion 1: Cart badge shows a non-zero number ---
         String pageSource = driver.getPageSource();
         Assert.assertTrue(
                 pageSource.contains("1 item") ||
@@ -121,9 +123,7 @@ public class CartTest {
         );
         System.out.println("Cart badge updated successfully");
 
-        // --- Assertion 2: Navigate to cart and verify it contains something ---
-        WebElement cartButton = driver.findElement(By.className("cart-label"));
-        js.executeScript("arguments[0].click();", cartButton);
+        driver.get("https://www.bestbuy.com/cart");
         Thread.sleep(4000);
 
         String cartPageSource = driver.getPageSource();
@@ -136,29 +136,25 @@ public class CartTest {
         System.out.println("Test 4 PASSED: Item found in cart after add-to-cart flow");
     }
 
-
     // Test 5: Verify item can be removed from cart
     @Test(priority = 5)
     public void verifyRemoveItemFromCart() throws InterruptedException {
-        // Search for a product
         WebElement searchBar = driver.findElement(By.id("autocomplete-search-bar"));
-        searchBar.sendKeys("Wireless Mouse");
-        searchBar.sendKeys(Keys.ENTER);
-        Thread.sleep(5000);
+        searchBar.sendKeys("Wireless Headphones");
+        WebElement searchBarButton = driver.findElement(By.id("autocomplete-search-button"));
+        searchBarButton.click();;
+        Thread.sleep(8000);
 
-        // Click the first product
-        WebElement firstProduct = wait.until(
+        String firstProductUrl = wait.until(
                 ExpectedConditions.presenceOfElementLocated(
-                        By.cssSelector("img[data-testid='product-image']")
+                        By.cssSelector("a[href*='/product/']")
                 )
-        );
-        js.executeScript("arguments[0].scrollIntoView({block: 'center'});", firstProduct);
-        Thread.sleep(1000);
-        js.executeScript("arguments[0].click();", firstProduct);
+        ).getAttribute("href");
+
+        driver.get(firstProductUrl);
         Thread.sleep(5000);
         System.out.println("Navigated to product page: " + driver.getCurrentUrl());
 
-        // Click Add to Cart
         WebElement atcButton = wait.until(
                 ExpectedConditions.presenceOfElementLocated(
                         By.cssSelector("button[data-testid^='pdp-add-to-cart']")
@@ -166,14 +162,13 @@ public class CartTest {
         );
         js.executeScript("arguments[0].scrollIntoView({block: 'center'});", atcButton);
         Thread.sleep(1500);
+        atcButton = driver.findElement(By.cssSelector("button[data-testid^='pdp-add-to-cart']"));
         js.executeScript("arguments[0].click();", atcButton);
         Thread.sleep(4000);
 
-        // Navigate to cart
         driver.get("https://www.bestbuy.com/cart");
         Thread.sleep(4000);
 
-        // Remove the item
         WebElement removeButton = wait.until(
                 ExpectedConditions.elementToBeClickable(
                         By.className("cart-item__remove")
@@ -182,7 +177,6 @@ public class CartTest {
         removeButton.click();
         Thread.sleep(3000);
 
-        // Assert cart is now empty
         String pageSource = driver.getPageSource();
         Assert.assertTrue(
                 pageSource.contains("Your cart is empty") ||
